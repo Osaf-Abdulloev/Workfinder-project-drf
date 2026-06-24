@@ -1,24 +1,18 @@
-"""
-Django settings for workfinder project.
-"""
-
 from pathlib import Path
 import os
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
+
 SECRET_KEY = 'django-insecure-your-secret-key-here-change-in-production'
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -63,7 +57,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'workfinder.wsgi.application'
 
 
-# Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -72,7 +65,7 @@ DATABASES = {
 }
 
 
-# Password validation
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -89,7 +82,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
+
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
@@ -99,24 +92,19 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Media files
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# drf-spectacular settings
 SPECTACULAR_SETTINGS = {
     'TITLE': 'WorkFinder API',
     'DESCRIPTION': 'A job finding platform API built with Django REST Framework',
