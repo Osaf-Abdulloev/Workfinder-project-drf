@@ -54,7 +54,7 @@ class MessageSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
     password2 = serializers.CharField(write_only=True, required=True)
-    is_seeker = serializers.BooleanField(required=True)
+    is_seeker = serializers.BooleanField(write_only=True, required=True)
 
     class Meta:
         model = User
@@ -66,10 +66,14 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        is_seeker = validated_data.pop('is_seeker')
+        validated_data.pop('password2')
+        
         user = User.objects.create(
             username=validated_data['username'],
             email=validated_data['email']
         )
         user.set_password(validated_data['password'])
         user.save()
-        return user
+        
+        return user, is_seeker

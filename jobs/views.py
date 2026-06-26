@@ -57,7 +57,7 @@ class MessageViewSet(viewsets.ModelViewSet):
 def register(request):
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
-        user = serializer.save()
+        user, is_seeker = serializer.save()
         refresh = RefreshToken.for_user(user)
         
         return Response({
@@ -65,7 +65,7 @@ def register(request):
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
-                'is_seeker': serializer.validated_data['is_seeker']
+                'is_seeker': is_seeker
             },
             'access': str(refresh.access_token),
             'refresh': str(refresh),
