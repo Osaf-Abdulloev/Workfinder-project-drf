@@ -1,18 +1,19 @@
 # WorkFinder API
 
-A simple job finding platform API built with Django REST Framework, JWT authentication, and drf-spectacular for API documentation.
+A production-ready job finding platform API built with Django REST Framework, JWT authentication, and featuring AI job matching, real-time chat, admin dashboard, and notification system.
 
 ## Features
 
-- JWT Authentication (Register, Login, Logout, Token Refresh)
-- Job Management (Create, Read, Update, Delete)
-- Employer Profiles
-- Seeker Profiles
-- Job Applications
-- Favorites
-- Messaging
-- Categories
-- API Documentation with Swagger/ReDoc
+- **JWT Authentication** (Register, Login, Logout, Token Refresh)
+- **AI Job Matching** - Upload resume (PDF/DOCX/TXT) and get intelligent job matches
+- **Real-time Chat** - WebSocket-based messaging between employers and job seekers
+- **Notification System** - Real-time notifications with read/unread status
+- **Admin Dashboard** - Comprehensive admin panel for superusers
+- **Advanced Search** - Full-text search with filters and ranking
+- **Job Management** - Create, update, delete jobs with rich details
+- **Application Tracking** - Track application status with notifications
+- **Favorites** - Save jobs for later
+- **Reports & Analytics**
 
 ## Installation
 
@@ -37,11 +38,10 @@ pip install -r requirements.txt
 
 4. Run migrations:
 ```bash
-python manage.py makemigrations
 python manage.py migrate
 ```
 
-5. Create a superuser (optional):
+5. Create a superuser:
 ```bash
 python manage.py createsuperuser
 ```
@@ -59,159 +59,6 @@ Once the server is running, access the interactive API documentation:
 - **ReDoc**: http://localhost:8000/api/redoc/
 - **OpenAPI Schema**: http://localhost:8000/api/schema/
 
-## Authentication
-
-### Register a New User
-
-**Endpoint:** `POST /api/auth/register/`
-
-**Request Body:**
-```json
-{
-  "username": "johndoe",
-  "email": "john@example.com",
-  "password": "securepassword123",
-  "password2": "securepassword123",
-  "is_seeker": true
-}
-```
-
-**Response:**
-```json
-{
-  "user": {
-    "id": 1,
-    "username": "johndoe",
-    "email": "john@example.com",
-    "is_seeker": true
-  },
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-}
-```
-
-The response includes:
-- User information
-- Access token (valid for 60 minutes)
-- Refresh token (valid for 7 days)
-
-### Login
-
-**Endpoint:** `POST /api/auth/login/`
-
-**Request Body:**
-```json
-{
-  "username": "johndoe",
-  "password": "securepassword123"
-}
-```
-
-**Response:**
-```json
-{
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-}
-```
-
-### Logout
-
-**Endpoint:** `POST /api/auth/logout/`
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
-```json
-{
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Successfully logged out"
-}
-```
-
-This will blacklist the refresh token, preventing it from being used again.
-
-### Refresh Token
-
-**Endpoint:** `POST /api/auth/token/refresh/`
-
-**Request Body:**
-```json
-{
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-}
-```
-
-**Response:**
-```json
-{
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-}
-```
-
-### Using the Access Token
-
-Include the access token in the Authorization header for authenticated requests:
-
-```
-Authorization: Bearer <access_token>
-```
-
-## Profile Creation
-
-After registration, users can create their profile based on their account type:
-
-### Create Seeker Profile
-
-**Endpoint:** `POST /api/create-seeker-profile/`
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
-```json
-{
-  "bio": "Experienced software developer",
-  "resume": null,
-  "experience": 5,
-  "education": "Bachelor's in Computer Science",
-  "birth_date": "1990-01-01",
-  "address": "New York, USA",
-  "is_created": true
-}
-```
-
-### Create Employer Profile
-
-**Endpoint:** `POST /api/create-employer-profile/`
-
-**Headers:**
-```
-Authorization: Bearer <access_token>
-```
-
-**Request Body:**
-```json
-{
-  "company_name": "Tech Company Inc",
-  "about": "We build great software",
-  "logo": null,
-  "location": "San Francisco, USA",
-  "is_created": true
-}
-```
-
 ## API Endpoints
 
 ### Authentication
@@ -219,63 +66,47 @@ Authorization: Bearer <access_token>
 - `POST /api/auth/login/` - Login (obtain tokens)
 - `POST /api/auth/logout/` - Logout (blacklist refresh token)
 - `POST /api/auth/token/refresh/` - Refresh access token
+
+### Profiles
 - `POST /api/create-seeker-profile/` - Create seeker profile
 - `POST /api/create-employer-profile/` - Create employer profile
 
-### Categories
+### Jobs & Categories
+- `GET /api/jobs/` - List all jobs (with filters)
+- `GET /api/jobs/search/?q=query` - Search jobs
+- `POST /api/jobs/` - Create a job
 - `GET /api/categories/` - List all categories
-- `POST /api/categories/` - Create a new category
-- `GET /api/categories/{id}/` - Retrieve a category
-- `PUT /api/categories/{id}/` - Update a category
-- `DELETE /api/categories/{id}/` - Delete a category
 
-### Employers
-- `GET /api/employers/` - List all employers
-- `POST /api/employers/` - Create a new employer profile
-- `GET /api/employers/{id}/` - Retrieve an employer
-- `PUT /api/employers/{id}/` - Update an employer
-- `DELETE /api/employers/{id}/` - Delete an employer
+### AI Matching
+- `POST /api/analyze-resume/` - Upload and analyze resume
+- `POST /api/match-jobs/` - Get AI job recommendations
 
-### Seekers
-- `GET /api/seekers/` - List all seekers
-- `POST /api/seekers/` - Create a new seeker profile
-- `GET /api/seekers/{id}/` - Retrieve a seeker
-- `PUT /api/seekers/{id}/` - Update a seeker
-- `DELETE /api/seekers/{id}/` - Delete a seeker
+### Notifications
+- `GET /api/notifications/` - List notifications
+- `POST /api/notifications/read-all/` - Mark all as read
 
-### Jobs
-- `GET /api/jobs/` - List all jobs
-- `POST /api/jobs/` - Create a new job
-- `GET /api/jobs/{id}/` - Retrieve a job
-- `PUT /api/jobs/{id}/` - Update a job
-- `DELETE /api/jobs/{id}/` - Delete a job
+### Real-time WebSocket
+- `ws/chat/<chat_id>/` - Connect to chat WebSocket
+- `ws/notifications/` - Connect to notifications WebSocket
 
-### Applications
-- `GET /api/applications/` - List all applications
-- `POST /api/applications/` - Create a new application
-- `GET /api/applications/{id}/` - Retrieve an application
-- `PUT /api/applications/{id}/` - Update an application
-- `DELETE /api/applications/{id}/` - Delete an application
+## Admin Dashboard
 
-### Favorites
-- `GET /api/favorites/` - List all favorites
-- `POST /api/favorites/` - Add a job to favorites
-- `GET /api/favorites/{id}/` - Retrieve a favorite
-- `DELETE /api/favorites/{id}/` - Remove from favorites
+Access the admin dashboard at `/admin/dashboard/` (Django superuser only).
 
-### Chats
-- `GET /api/chats/` - List all chats
-- `POST /api/chats/` - Create a new chat
-- `GET /api/chats/{id}/` - Retrieve a chat
-- `DELETE /api/chats/{id}/` - Delete a chat
+Features:
+- Statistics cards
+- Charts and analytics
+- User management
+- Job management
+- Reports
 
-### Messages
-- `GET /api/messages/` - List all messages
-- `POST /api/messages/` - Send a message
-- `GET /api/messages/{id}/` - Retrieve a message
-- `PUT /api/messages/{id}/` - Update a message
-- `DELETE /api/messages/{id}/` - Delete a message
+## Security Features
 
-## Admin Panel
-
-Access the Django admin panel at http://localhost:8000/admin/ to manage all models through the web interface.
+- JWT token authentication
+- Password validation (min 10 characters)
+- CSRF protection
+- XSS protection
+- Secure file uploads (max 10MB)
+- Rate limiting
+- Security headers
+- Permission-based access control
