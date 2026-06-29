@@ -1,12 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     CategoryViewSet, EmployerViewSet, SeekerViewSet, JobViewSet,
     ApplicationViewSet, FavoriteViewSet, ChatViewSet, MessageViewSet,
     register, create_seeker_profile, create_employer_profile, logout,
     notification_list, mark_all_read, delete_notification,
-    analyze_resume, match_jobs, admin_stats, report_user
+    analyze_resume, match_jobs, admin_stats, report_user, report_job,
+    change_password, MyTokenObtainPairView
 )
 
 router = DefaultRouter()
@@ -22,8 +23,9 @@ router.register(r'messages', MessageViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('auth/register/', register),
-    path('auth/login/', TokenObtainPairView.as_view()),
+    path('auth/login/', MyTokenObtainPairView.as_view()),
     path('auth/logout/', logout),
+    path('auth/change-password/', change_password),
     path('auth/token/refresh/', TokenRefreshView.as_view()),
     path('create-seeker-profile/', create_seeker_profile),
     path('create-employer-profile/', create_employer_profile),
@@ -34,4 +36,5 @@ urlpatterns = [
     path('match-jobs/', match_jobs),
     path('admin-stats/', admin_stats),
     path('report-user/', report_user),
+    path('report-job/', report_job),
 ]

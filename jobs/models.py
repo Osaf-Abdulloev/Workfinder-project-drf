@@ -23,9 +23,10 @@ class Employer(models.Model):
 class Seeker(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='seeker_profile')
     bio = models.TextField()
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     resume = models.FileField(upload_to='resumes/', blank=True, null=True)
-    experience = models.PositiveIntegerField(default=0)
-    education = models.CharField(max_length=100, blank=True, null=True)
+    experience = models.TextField(blank=True, null=True)
+    education = models.TextField(blank=True, null=True)
     birth_date = models.DateField(blank=True, null=True)
     address = models.CharField(max_length=100, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)

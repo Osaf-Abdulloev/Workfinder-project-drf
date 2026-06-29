@@ -19,14 +19,20 @@ from .models import (
     Employer, Seeker, Category, Job, Application, Favorite, Chat, Message,
     Notification, Skill, ResumeAnalysis, JobMatch, Report, SearchQuery
 )
+from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import (
     EmployerSerializer, SeekerSerializer, CategorySerializer, JobSerializer,
     ApplicationSerializer, FavoriteSerializer, ChatSerializer, MessageSerializer,
     RegisterSerializer, NotificationSerializer, ResumeAnalysisSerializer,
     JobMatchSerializer, ReportSerializer, AdminStatsSerializer, RegisterResponseSerializer,
     JobSearchSerializer, MatchJobsResponseSerializer, ResumeAnalysisResponseSerializer,
-    NotificationListResponseSerializer, ReportUserSerializer
+    NotificationListResponseSerializer, ReportUserSerializer, ReportJobSerializer,
+    MyTokenObtainPairSerializer, ChangePasswordSerializer
 )
+
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -36,41 +42,71 @@ class CategoryViewSet(viewsets.ModelViewSet):
     search_fields = ['name']
     ordering = ['name']
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
 
 class EmployerViewSet(viewsets.ModelViewSet):
     queryset = Employer.objects.all()
     serializer_class = EmployerSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['company_name', 'location', 'about']
+    search_fields = ['user__username', 'company_name', 'location', 'about']
     ordering = ['-created_at']
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
-        if self.request.user.is_superuser:
+        user = self.request.user
+        if user.is_superuser:
             return Employer.objects.all()
-        return Employer.objects.filter(is_verified=True)
+        return Employer.objects.filter(
+            Q(is_verified=True) | Q(user=user)
+        )
 
 
 class SeekerViewSet(viewsets.ModelViewSet):
     queryset = Seeker.objects.all()
     serializer_class = SeekerSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['bio', 'address', 'education']
+    search_fields = ['user__username', 'bio', 'address', 'education']
     ordering = ['-created_at']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
 
 class JobViewSet(viewsets.ModelViewSet):
-    queryset = Job.objects.filter(is_deleted=False, is_active=True)
+    queryset = Job.objects.filter(is_deleted=False)
     serializer_class = JobSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'description', 'location']
     ordering = ['-created_at']
-    filterset_fields = ['job_type', 'workplace_type', 'category', 'location']
+    filterset_fields = ['job_type', 'workplace_type', 'category', 'location', 'company']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'search']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
-        queryset = Job.objects.filter(is_deleted=False, is_active=True)
+        user = self.request.user
+        # Superusers see all non-deleted jobs
+        if user.is_authenticated and user.is_superuser:
+            queryset = Job.objects.filter(is_deleted=False)
+        # Employers can see their own jobs (including inactive)
+        elif user.is_authenticated and hasattr(user, 'employer_profile'):
+            queryset = Job.objects.filter(is_deleted=False, company=user.employer_profile)
+        # Seekers and unauthenticated users only see active jobs
+        else:
+            queryset = Job.objects.filter(is_deleted=False, is_active=True)
+
         min_salary = self.request.query_params.get('min_salary')
         max_salary = self.request.query_params.get('max_salary')
         min_experience = self.request.query_params.get('min_experience')
@@ -83,6 +119,13 @@ class JobViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(experience_required__lte=min_experience)
 
         return queryset.select_related('company', 'category').prefetch_related('skills_required')
+
+    def perform_create(self, serializer):
+        try:
+            employer = self.request.user.employer_profile
+        except Employer.DoesNotExist:
+            raise serializers.ValidationError({"detail": "User must have an employer profile to post jobs."})
+        serializer.save(company=employer)
 
     @action(detail=False, methods=['get'])
     def search(self, request):
@@ -118,13 +161,23 @@ class JobViewSet(viewsets.ModelViewSet):
 class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = Application.objects.filter(is_deleted=False)
     serializer_class = ApplicationSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'job', 'user']
     ordering = ['-created_at']
 
+    def get_permissions(self):
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Application.objects.filter(is_deleted=False)
+        if hasattr(user, 'employer_profile'):
+            return Application.objects.filter(is_deleted=False, job__company=user.employer_profile)
+        return Application.objects.filter(is_deleted=False, user=user)
+
     def perform_create(self, serializer):
-        application = serializer.save()
+        application = serializer.save(user=self.request.user)
         self.create_notification(application)
 
     def create_notification(self, application):
@@ -140,34 +193,64 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 class FavoriteViewSet(viewsets.ModelViewSet):
     queryset = Favorite.objects.filter(is_deleted=False)
     serializer_class = FavoriteSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         return Favorite.objects.filter(user=self.request.user, is_deleted=False)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class ChatViewSet(viewsets.ModelViewSet):
     queryset = Chat.objects.all()
     serializer_class = ChatSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     ordering = ['-created_at']
+
+    def get_permissions(self):
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
         return Chat.objects.filter(Q(user1=user) | Q(user2=user), is_active=True)
 
+    def create(self, request, *args, **kwargs):
+        user1_id = request.data.get('user1')
+        user2_id = request.data.get('user2')
+        if not user1_id or not user2_id:
+            return Response({'error': 'Both user1 and user2 are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        chat = Chat.objects.filter(
+            (Q(user1_id=user1_id) & Q(user2_id=user2_id)) |
+            (Q(user1_id=user2_id) & Q(user2_id=user1_id))
+        ).first()
+        
+        if chat:
+            serializer = self.get_serializer(chat)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+            
+        return super().create(request, *args, **kwargs)
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['chat']
     ordering = ['created_at']
+
+    def get_permissions(self):
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
         return Message.objects.filter(chat__in=Chat.objects.filter(Q(user1=user) | Q(user2=user)))
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)
 
 
 @extend_schema(request=RegisterSerializer, responses=RegisterResponseSerializer)
@@ -176,19 +259,38 @@ class MessageViewSet(viewsets.ModelViewSet):
 def register(request):
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
-        user, is_seeker = serializer.save()
+        user = serializer.save()
+        is_seeker = getattr(serializer, '_is_seeker', True)
         refresh = RefreshToken.for_user(user)
         return Response({
             'user': {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
+                'user_type': 'seeker' if is_seeker else 'employer',
                 'is_seeker': is_seeker
             },
             'access': str(refresh.access_token),
             'refresh': str(refresh),
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@extend_schema(request=ChangePasswordSerializer, responses={200: None})
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    serializer = ChangePasswordSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    user = request.user
+    if not user.check_password(serializer.validated_data['old_password']):
+        return Response({'old_password': ['Current password is incorrect.']}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(serializer.validated_data['new_password'])
+    user.save()
+    return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
 
 
 @extend_schema(request=SeekerSerializer, responses=SeekerSerializer)
@@ -235,12 +337,9 @@ def create_employer_profile(request):
 def logout(request):
     try:
         refresh_token = request.data.get('refresh')
-        if not refresh_token:
-            return Response({'error': 'Refresh token is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
         return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -313,11 +412,18 @@ def analyze_resume(request):
         certifications=analysis.get('certifications', [])
     )
 
+    experience_text = f"{analysis.get('experience_years', 0)} years"
+    if analysis.get('job_titles'):
+        experience_text += f" as {', '.join(analysis['job_titles'])}"
+
     return Response({
         'analysis_id': resume_analysis.id,
         'skills': analysis.get('skills', []),
         'experience_years': analysis.get('experience_years', 0),
         'education_level': analysis.get('education_level', ''),
+        'experience': experience_text,
+        'education': analysis.get('education_level', ''),
+        'recommendations': [],
         'job_titles': analysis.get('job_titles', []),
         'technologies': analysis.get('technologies', []),
         'languages': analysis.get('languages', []),
@@ -406,7 +512,7 @@ def match_jobs(request):
     else:
         latest_analysis = ResumeAnalysis.objects.filter(seeker=seeker).order_by('-created_at').first()
         if not latest_analysis:
-            return Response({'error': 'No resume analysis found'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'matches': [], 'total_count': 0})
         analysis = {
             'skills': latest_analysis.skills_found,
             'experience_years': latest_analysis.experience_years,
@@ -501,7 +607,7 @@ def admin_stats(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def report_user(request):
-    reported_id = request.data.get('reported_user_id')
+    reported_id = request.data.get('reported_user_id') or request.data.get('reported_user')
     reason = request.data.get('reason')
 
     if not reported_id or not reason:
@@ -516,6 +622,32 @@ def report_user(request):
         reporter=request.user,
         reported_user=reported_user,
         report_type='user_report',
+        reason=reason
+    )
+
+    return Response({'message': 'Report submitted', 'report_id': report.id})
+
+
+@extend_schema(request=ReportJobSerializer, responses={200: None})
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def report_job(request):
+    job_id = request.data.get('job')
+    reason = request.data.get('reason')
+
+    if not job_id or not reason:
+        return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        job = Job.objects.get(id=job_id)
+    except Job.DoesNotExist:
+        return Response({'error': 'Job not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    report = Report.objects.create(
+        reporter=request.user,
+        job=job,
+        reported_user=job.company.user,
+        report_type='job_report',
         reason=reason
     )
 

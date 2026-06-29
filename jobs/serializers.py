@@ -8,6 +8,17 @@ from .models import (
 )
 
 
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+class SkillSlugRelatedField(serializers.SlugRelatedField):
+    def to_internal_value(self, data):
+        try:
+            skill, created = Skill.objects.get_or_create(name=data)
+            return skill
+        except Exception:
+            self.fail('invalid')
+
+
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Skill
@@ -37,15 +48,46 @@ class CategorySerializer(serializers.ModelSerializer):
 class EmployerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.CharField(source='user.email', read_only=True)
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Employer
         fields = '__all__'
 
+    def get_first_name(self, obj):
+        return obj.user.first_name if obj.user else ''
+
+    def get_last_name(self, obj):
+        return obj.user.last_name if obj.user else ''
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        if request:
+            first_name = request.data.get('first_name')
+            last_name = request.data.get('last_name')
+            user = instance.user
+            if user:
+                if first_name is not None:
+                    user.first_name = first_name
+                if last_name is not None:
+                    user.last_name = last_name
+                user.save()
+        return super().update(instance, validated_data)
+
 
 class SeekerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.CharField(source='user.email', read_only=True)
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
+    location = serializers.CharField(source='address', required=False, allow_blank=True)
+    skills = SkillSlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=Skill.objects.all(),
+        required=False
+    )
     skills_list = serializers.SlugRelatedField(
         source='skills',
         many=True,
@@ -55,21 +97,46 @@ class SeekerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Seeker
-        fields = '__all__'
+        exclude = ['address']
+
+    def get_first_name(self, obj):
+        return obj.user.first_name if obj.user else ''
+
+    def get_last_name(self, obj):
+        return obj.user.last_name if obj.user else ''
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        if request:
+            first_name = request.data.get('first_name')
+            last_name = request.data.get('last_name')
+            user = instance.user
+            if user:
+                if first_name is not None:
+                    user.first_name = first_name
+                if last_name is not None:
+                    user.last_name = last_name
+                user.save()
+        return super().update(instance, validated_data)
 
 
 class JobSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.company_name', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
-    skills_required = serializers.SlugRelatedField(
+    company_logo = serializers.ImageField(source='company.logo', read_only=True)
+    company_website = serializers.URLField(source='company.website', read_only=True)
+    company_about = serializers.CharField(source='company.about', read_only=True)
+    skills_required = SkillSlugRelatedField(
         many=True,
         slug_field='name',
-        queryset=Skill.objects.all()
+        queryset=Skill.objects.all(),
+        required=False
     )
 
     class Meta:
         model = Job
         fields = '__all__'
+        read_only_fields = ['company']
 
 
 class JobSearchSerializer(serializers.Serializer):
@@ -82,16 +149,24 @@ class JobSearchSerializer(serializers.Serializer):
 class ApplicationSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source='job.title', read_only=True)
     company_name = serializers.CharField(source='job.company.company_name', read_only=True)
+    applicant_username = serializers.CharField(source='user.username', read_only=True)
+    applicant_email = serializers.CharField(source='user.email', read_only=True)
 
     class Meta:
         model = Application
         fields = '__all__'
+        read_only_fields = ['user']
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
+    job_title = serializers.CharField(source='job.title', read_only=True)
+    company_name = serializers.CharField(source='job.company.company_name', read_only=True)
+    job_location = serializers.CharField(source='job.location', read_only=True)
+
     class Meta:
         model = Favorite
         fields = '__all__'
+        read_only_fields = ['user']
 
 
 class ChatSerializer(serializers.ModelSerializer):
@@ -109,17 +184,19 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = '__all__'
+        read_only_fields = ['sender']
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
-    is_seeker = serializers.BooleanField(write_only=True, required=True)
+    user_type = serializers.ChoiceField(choices=['seeker', 'employer'], write_only=True, required=False)
+    is_seeker = serializers.BooleanField(write_only=True, required=False)
     email = serializers.EmailField()
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2', 'is_seeker']
+        fields = ['username', 'email', 'password', 'password2', 'is_seeker', 'user_type']
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -127,7 +204,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        is_seeker = validated_data.pop('is_seeker')
+        user_type = validated_data.pop('user_type', 'seeker')
+        validated_data.pop('is_seeker', None)
         validated_data.pop('password2')
 
         user = User.objects.create(
@@ -137,7 +215,36 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(validated_data['password'])
         user.save()
 
-        return user, is_seeker
+        if user_type == 'employer':
+            Employer.objects.create(user=user, company_name=user.username + " Company", is_created=True)
+            self._is_seeker = False
+        else:
+            Seeker.objects.create(user=user, is_created=True)
+            self._is_seeker = True
+
+        return user
+
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+        
+        user_type = 'seeker'
+        if hasattr(user, 'seeker_profile'):
+            user_type = 'seeker'
+        elif hasattr(user, 'employer_profile'):
+            user_type = 'employer'
+        elif user.is_superuser:
+            user_type = 'admin'
+            
+        data['user'] = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'user_type': user_type
+        }
+        return data
 
 
 class RegisterResponseSerializer(serializers.Serializer):
@@ -197,8 +304,25 @@ class ReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['reporter', 'created_at']
 
 
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, validators=[validate_password])
+    confirm_password = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return attrs
+
+
 class ReportUserSerializer(serializers.Serializer):
     reported_user_id = serializers.IntegerField()
+    reason = serializers.CharField()
+    reported_user = serializers.IntegerField(required=False)
+
+
+class ReportJobSerializer(serializers.Serializer):
+    job = serializers.IntegerField()
     reason = serializers.CharField()
 
 
@@ -217,6 +341,9 @@ class ResumeAnalysisResponseSerializer(serializers.Serializer):
     skills = serializers.ListField()
     experience_years = serializers.IntegerField()
     education_level = serializers.CharField()
+    experience = serializers.CharField()
+    education = serializers.CharField()
+    recommendations = serializers.ListField()
     job_titles = serializers.ListField()
     technologies = serializers.ListField()
     languages = serializers.ListField()
