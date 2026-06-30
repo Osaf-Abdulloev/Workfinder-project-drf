@@ -298,14 +298,20 @@ def change_password(request):
 @permission_classes([IsAuthenticated])
 def create_seeker_profile(request):
     user = request.user
-    if Seeker.objects.filter(user=user).exists():
-        return Response({'error': 'Profile already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    seeker = Seeker.objects.filter(user=user).first()
+    if seeker:
+        data = request.data.copy()
+        serializer = SeekerSerializer(seeker, data=data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data.copy()
     data['user'] = user.id
     data['is_created'] = True
 
-    serializer = SeekerSerializer(data=data)
+    serializer = SeekerSerializer(data=data, context={'request': request})
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -317,14 +323,20 @@ def create_seeker_profile(request):
 @permission_classes([IsAuthenticated])
 def create_employer_profile(request):
     user = request.user
-    if Employer.objects.filter(user=user).exists():
-        return Response({'error': 'Profile already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    employer = Employer.objects.filter(user=user).first()
+    if employer:
+        data = request.data.copy()
+        serializer = EmployerSerializer(employer, data=data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     data = request.data.copy()
     data['user'] = user.id
     data['is_created'] = True
 
-    serializer = EmployerSerializer(data=data)
+    serializer = EmployerSerializer(data=data, context={'request': request})
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)

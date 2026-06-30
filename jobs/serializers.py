@@ -190,13 +190,12 @@ class MessageSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
-    user_type = serializers.ChoiceField(choices=['seeker', 'employer'], write_only=True, required=False)
-    is_seeker = serializers.BooleanField(write_only=True, required=False)
+    user_type = serializers.ChoiceField(choices=['seeker', 'employer'], write_only=True)
     email = serializers.EmailField()
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2', 'is_seeker', 'user_type']
+        fields = ['username', 'email', 'password', 'password2', 'user_type']
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -204,8 +203,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        user_type = validated_data.pop('user_type', 'seeker')
-        validated_data.pop('is_seeker', None)
+        user_type = validated_data.pop('user_type')
         validated_data.pop('password2')
 
         user = User.objects.create(
