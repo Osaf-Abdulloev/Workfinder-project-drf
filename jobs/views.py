@@ -69,10 +69,12 @@ class EmployerViewSet(viewsets.ModelViewSet):
         )
 
     def partial_update(self, request, *args, **kwargs):
-        import logging
-        logger = logging.getLogger('django.request')
-        logger.warning(f'Employer PATCH data: {dict(request.data)} files: {list(request.FILES.keys())}')
+        print(f'EmployerPatch data_keys={list(request.data.keys())} data={dict(request.data)} files={list(request.FILES.keys())}', flush=True)
         return super().partial_update(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        print(f'EmployerPut data_keys={list(request.data.keys())} data={dict(request.data)} files={list(request.FILES.keys())}', flush=True)
+        return super().update(request, *args, **kwargs)
 
 
 class SeekerViewSet(viewsets.ModelViewSet):
