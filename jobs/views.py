@@ -68,6 +68,12 @@ class EmployerViewSet(viewsets.ModelViewSet):
             Q(is_verified=True) | Q(user=user)
         )
 
+    def partial_update(self, request, *args, **kwargs):
+        import logging
+        logger = logging.getLogger('django.request')
+        logger.warning(f'Employer PATCH data: {dict(request.data)} files: {list(request.FILES.keys())}')
+        return super().partial_update(request, *args, **kwargs)
+
 
 class SeekerViewSet(viewsets.ModelViewSet):
     queryset = Seeker.objects.all()
