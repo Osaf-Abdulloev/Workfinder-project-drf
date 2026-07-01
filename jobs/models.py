@@ -7,9 +7,9 @@ from django.dispatch import receiver
 class Employer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='employer_profile')
     company_name = models.CharField(max_length=100)
-    about = models.TextField()
+    about = models.TextField(blank=True, default='')
     logo = models.ImageField(upload_to='companylogos/', blank=True, null=True)
-    location = models.CharField(max_length=100)
+    location = models.CharField(max_length=100, blank=True, default='')
     website = models.URLField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_created = models.BooleanField(default=False)
@@ -22,7 +22,7 @@ class Employer(models.Model):
 
 class Seeker(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='seeker_profile')
-    bio = models.TextField()
+    bio = models.TextField(blank=True, default='')
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     resume = models.FileField(upload_to='resumes/', blank=True, null=True)
     experience = models.TextField(blank=True, null=True)
