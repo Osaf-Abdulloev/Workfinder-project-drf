@@ -9,6 +9,7 @@ from .views import (
     analyze_resume, match_jobs, admin_stats, report_user, report_job,
     change_password, MyTokenObtainPairView
 )
+from .career_analyst import ai_analyze_profile, ai_match_jobs, smart_job_filters
 
 router = DefaultRouter()
 router.register(r'categories', CategoryViewSet)
@@ -37,4 +38,7 @@ urlpatterns = [
     path('admin-stats/', admin_stats),
     path('report-user/', report_user),
     path('report-job/', report_job),
+    path('ai/analyze/', ai_analyze_profile, name='ai-analyze-profile'),
+    path('ai/match/', ai_match_jobs, name='ai-match-jobs'),
+    path('ai/filters/', smart_job_filters, name='ai-smart-filters'),
 ]
