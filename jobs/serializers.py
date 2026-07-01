@@ -178,12 +178,69 @@ class FavoriteSerializer(serializers.ModelSerializer):
 
 
 class ChatSerializer(serializers.ModelSerializer):
-    user1_username = serializers.CharField(source='user1.username', read_only=True)
-    user2_username = serializers.CharField(source='user2.username', read_only=True)
+    other_user = serializers.SerializerMethodField()
+    other_username = serializers.SerializerMethodField()
+    other_avatar = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    last_message_at = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Chat
-        fields = '__all__'
+        fields = ['id', 'user1', 'user2', 'created_at', 'updated_at', 'is_active',
+                  'other_user', 'other_username', 'other_avatar',
+                  'last_message', 'last_message_at', 'unread_count']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_other_user(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return None
+        user = request.user
+        other = obj.user2 if obj.user1 == user else obj.user1
+        return other.id
+
+    def get_other_username(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return ''
+        user = request.user
+        other = obj.user2 if obj.user1 == user else obj.user1
+        return other.username
+
+    def get_other_avatar(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return None
+        user = request.user
+        other = obj.user2 if obj.user1 == user else obj.user1
+        if hasattr(other, 'seeker_profile') and other.seeker_profile.avatar:
+            return other.seeker_profile.avatar.url if other.seeker_profile.avatar else None
+        if hasattr(other, 'employer_profile') and other.employer_profile.logo:
+            return other.employer_profile.logo.url if other.employer_profile.logo else None
+        return None
+
+    def get_last_message(self, obj):
+        last = obj.messages.order_by('-created_at').first()
+        if last:
+            return {
+                'id': last.id,
+                'text': last.text,
+                'sender': last.sender_id,
+                'sender_username': last.sender.username,
+                'created_at': last.created_at.isoformat(),
+            }
+        return None
+
+    def get_last_message_at(self, obj):
+        last = obj.messages.order_by('-created_at').first()
+        return last.created_at.isoformat() if last else obj.created_at.isoformat()
+
+    def get_unread_count(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return 0
+        return obj.messages.filter(is_read=False).exclude(sender=request.user).count()
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -191,8 +248,8 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
-        fields = '__all__'
-        read_only_fields = ['sender']
+        fields = ['id', 'chat', 'sender', 'sender_username', 'text', 'created_at', 'is_read', 'is_delivered']
+        read_only_fields = ['sender', 'is_read', 'is_delivered']
 
 
 class RegisterSerializer(serializers.ModelSerializer):

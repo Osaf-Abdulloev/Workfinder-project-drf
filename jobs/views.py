@@ -68,13 +68,7 @@ class EmployerViewSet(viewsets.ModelViewSet):
             Q(is_verified=True) | Q(user=user)
         )
 
-    def partial_update(self, request, *args, **kwargs):
-        print(f'EmployerPatch data_keys={list(request.data.keys())} data={dict(request.data)} files={list(request.FILES.keys())}', flush=True)
-        return super().partial_update(request, *args, **kwargs)
 
-    def update(self, request, *args, **kwargs):
-        print(f'EmployerPut data_keys={list(request.data.keys())} data={dict(request.data)} files={list(request.FILES.keys())}', flush=True)
-        return super().update(request, *args, **kwargs)
 
 
 class SeekerViewSet(viewsets.ModelViewSet):
@@ -216,31 +210,74 @@ class ChatViewSet(viewsets.ModelViewSet):
     queryset = Chat.objects.all()
     serializer_class = ChatSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    ordering = ['-created_at']
+    ordering = ['-updated_at']
 
     def get_permissions(self):
         return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
-        return Chat.objects.filter(Q(user1=user) | Q(user2=user), is_active=True)
+        return Chat.objects.filter(Q(user1=user) | Q(user2=user), is_active=True).distinct()
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def create(self, request, *args, **kwargs):
-        user1_id = request.data.get('user1')
         user2_id = request.data.get('user2')
-        if not user1_id or not user2_id:
-            return Response({'error': 'Both user1 and user2 are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        if not user2_id:
+            return Response({'error': 'user2 is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user1 = request.user
+        if int(user2_id) == user1.id:
+            return Response({'error': 'Cannot create chat with yourself'}, status=status.HTTP_400_BAD_REQUEST)
+
         chat = Chat.objects.filter(
-            (Q(user1_id=user1_id) & Q(user2_id=user2_id)) |
-            (Q(user1_id=user2_id) & Q(user2_id=user1_id))
+            (Q(user1=user1, user2_id=user2_id) | Q(user1_id=user2_id, user2=user1))
         ).first()
-        
+
         if chat:
             serializer = self.get_serializer(chat)
             return Response(serializer.data, status=status.HTTP_200_OK)
-            
-        return super().create(request, *args, **kwargs)
+
+        chat = Chat.objects.create(user1=user1, user_id=user2_id)
+        serializer = self.get_serializer(chat)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='from-application')
+    def from_application(self, request):
+        application_id = request.data.get('application_id')
+        if not application_id:
+            return Response({'error': 'application_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            application = Application.objects.select_related('user', 'job__company__user').get(id=application_id)
+        except Application.DoesNotExist:
+            return Response({'error': 'Application not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        employer_user = application.job.company.user
+        seeker_user = application.user
+
+        if request.user.id not in [employer_user.id, seeker_user.id]:
+            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        chat = Chat.objects.filter(
+            (Q(user1=employer_user, user2=seeker_user) |
+             Q(user1=seeker_user, user2=employer_user))
+        ).first()
+
+        if not chat:
+            chat = Chat.objects.create(user1=employer_user, user2=seeker_user)
+
+        serializer = self.get_serializer(chat)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='mark-read')
+    def mark_read(self, request, pk=None):
+        chat = self.get_object()
+        updated = chat.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
+        return Response({'marked_read': updated})
 
 
 class MessageViewSet(viewsets.ModelViewSet):
@@ -255,10 +292,13 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return Message.objects.filter(chat__in=Chat.objects.filter(Q(user1=user) | Q(user2=user)))
+        return Message.objects.filter(
+            chat__in=Chat.objects.filter(Q(user1=user) | Q(user2=user))
+        )
 
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+        msg = serializer.save(sender=self.request.user)
+        msg.chat.save()
 
 
 @extend_schema(request=RegisterSerializer, responses=RegisterResponseSerializer)
