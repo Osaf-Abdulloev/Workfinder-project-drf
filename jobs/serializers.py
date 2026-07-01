@@ -50,6 +50,7 @@ class EmployerSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source='user.email', read_only=True)
     first_name = serializers.SerializerMethodField()
     last_name = serializers.SerializerMethodField()
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Employer
@@ -58,7 +59,7 @@ class EmployerSerializer(serializers.ModelSerializer):
             'website', 'created_at', 'is_created', 'is_verified', 'is_banned',
             'username', 'email', 'first_name', 'last_name',
         ]
-        read_only_fields = ['user', 'is_created', 'is_verified', 'is_banned', 'created_at']
+        read_only_fields = ['is_created', 'is_verified', 'is_banned', 'created_at']
 
     def get_first_name(self, obj):
         return obj.user.first_name if obj.user else ''
@@ -86,6 +87,7 @@ class SeekerSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source='user.email', read_only=True)
     first_name = serializers.SerializerMethodField()
     last_name = serializers.SerializerMethodField()
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
     location = serializers.CharField(source='address', required=False, allow_blank=True)
     skills = SkillSlugRelatedField(
         many=True,
@@ -103,7 +105,7 @@ class SeekerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Seeker
         exclude = ['address']
-        read_only_fields = ['user', 'is_created', 'is_verified', 'is_banned']
+        read_only_fields = ['is_created', 'is_verified', 'is_banned']
 
     def get_first_name(self, obj):
         return obj.user.first_name if obj.user else ''
