@@ -53,7 +53,12 @@ class EmployerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employer
-        fields = '__all__'
+        fields = [
+            'id', 'user', 'company_name', 'about', 'logo', 'location',
+            'website', 'created_at', 'is_created', 'is_verified', 'is_banned',
+            'username', 'email', 'first_name', 'last_name',
+        ]
+        read_only_fields = ['user', 'is_created', 'is_verified', 'is_banned', 'created_at']
 
     def get_first_name(self, obj):
         return obj.user.first_name if obj.user else ''
@@ -98,6 +103,7 @@ class SeekerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Seeker
         exclude = ['address']
+        read_only_fields = ['user', 'is_created', 'is_verified', 'is_banned']
 
     def get_first_name(self, obj):
         return obj.user.first_name if obj.user else ''
